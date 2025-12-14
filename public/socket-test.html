@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Socket.IO Connection Test</title>
+    <script src="https://cdn.socket.io/4.7.0/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+        }
+        .status {
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .connected {
+            background: #d4edda;
+            color: #155724;
+        }
+        .disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        #messages {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin-top: 20px;
+            background: #f9f9f9;
+        }
+        .message {
+            padding: 5px;
+            margin: 5px 0;
+            border-left: 3px solid #007bff;
+            padding-left: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔌 Socket.IO Connection Test</h1>
+        
+        <div id="status" class="status disconnected">
+            Status: Disconnected
+        </div>
+
+        <div>
+            <button onclick="connect()">Connect</button>
+            <button onclick="disconnect()">Disconnect</button>
+            <button onclick="sendTestMessage()">Send Test Message</button>
+            <button onclick="clearMessages()">Clear</button>
+        </div>
+
+        <div id="info" class="status info" style="margin-top: 20px;">
+            <strong>Server:</strong> <span id="serverUrl">http://localhost:3000</span><br>
+            <strong>Path:</strong> /api/socket.io<br>
+            <strong>Socket ID:</strong> <span id="socketId">-</span>
+        </div>
+
+        <h3>Messages:</h3>
+        <div id="messages"></div>
+    </div>
+
+    <script>
+        let socket = null;
+        const serverUrl = window.location.origin;
+        document.getElementById('serverUrl').textContent = serverUrl;
+
+        function addMessage(message, type = 'info') {
+            const messagesDiv = document.getElementById('messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message';
+            messageDiv.innerHTML = `<strong>[${new Date().toLocaleTimeString()}]</strong> ${message}`;
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function updateStatus(connected, socketId = null) {
+            const statusDiv = document.getElementById('status');
+            const socketIdSpan = document.getElementById('socketId');
+            
+            if (connected) {
+                statusDiv.className = 'status connected';
+                statusDiv.textContent = `Status: Connected ✅ (ID: ${socketId || 'N/A'})`;
+                socketIdSpan.textContent = socketId || '-';
+            } else {
+                statusDiv.className = 'status disconnected';
+                statusDiv.textContent = 'Status: Disconnected ❌';
+                socketIdSpan.textContent = '-';
+            }
+        }
+
+        function connect() {
+            if (socket && socket.connected) {
+                addMessage('Already connected!', 'info');
+                return;
+            }
+
+            addMessage('Connecting to Socket.IO server...', 'info');
+            
+            socket = io(serverUrl, {
+                path: '/api/socket.io',
+                transports: ['websocket', 'polling'],
+                reconnection: true,
+                reconnectionDelay: 1000,
+                reconnectionAttempts: 5,
+            });
+
+            socket.on('connect', () => {
+                addMessage(`✅ Connected! Socket ID: ${socket.id}`, 'success');
+                updateStatus(true, socket.id);
+            });
+
+            socket.on('disconnect', (reason) => {
+                addMessage(`❌ Disconnected: ${reason}`, 'error');
+                updateStatus(false);
+            });
+
+            socket.on('connect_error', (error) => {
+                addMessage(`❌ Connection Error: ${error.message}`, 'error');
+                updateStatus(false);
+            });
+
+            socket.on('need:new', (data) => {
+                addMessage(`📨 Need Request: ${JSON.stringify(data)}`, 'info');
+            });
+
+            socket.on('order:new', (data) => {
+                addMessage(`📦 New Order: ${JSON.stringify(data)}`, 'info');
+            });
+
+            socket.on('chat:message', (data) => {
+                addMessage(`💬 Chat Message: ${data.message}`, 'info');
+            });
+        }
+
+        function disconnect() {
+            if (socket) {
+                socket.disconnect();
+                addMessage('Disconnected manually', 'info');
+                updateStatus(false);
+            }
+        }
+
+        function sendTestMessage() {
+            if (!socket || !socket.connected) {
+                addMessage('❌ Not connected! Connect first.', 'error');
+                return;
+            }
+
+            socket.emit('test', { message: 'Hello from browser!', timestamp: new Date() });
+            addMessage('📤 Test message sent', 'info');
+        }
+
+        function clearMessages() {
+            document.getElementById('messages').innerHTML = '';
+        }
+
+        // Auto-connect on page load
+        window.addEventListener('load', () => {
+            addMessage('Page loaded. Click "Connect" to start.', 'info');
+        });
+    </script>
+</body>
+</html>
+
